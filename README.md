@@ -7,3 +7,5 @@ To use my program, put it in the grasshopper/exec/Examples directory of grasshop
 Please refer to this site to learn more about what this program does and the algorithms it uses.
 
 https://anushbareyan.github.io/copper-radiation-site/
+
+Alternatively, you can use Final_Radiation_effects_on_copper.ipynb to run manually, in the notebook.
