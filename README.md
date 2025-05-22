@@ -14,7 +14,7 @@ An example of gdml file needed to run grasshopper is copper.gdml
 
 do
 
-pip install netCDF4 numpy scipy matplotlib pandas
+pip install netCDF4 numpy scipy matplotlib pandas bs4 requests
 
 To use the automated program created in the complete_program directory, git clone this in the grasshopper/exec/Examples directory of grasshopper. The program will ask for the dataset link, the number of years of the dataset, the number of target years, to which the program will scale the results, and the copper size.
 
