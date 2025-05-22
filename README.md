@@ -6,7 +6,7 @@ To run the program manually, use the notebook:
 
 **`Final_Radiation_effects_on_copper.ipynb`**
 
-Run all the cells except the last one, get the input_spectrum.txt file(put in grasshopper directory), and the number of simulations(change the .gdml file <constant name="EventsToRun" value="{number of simulations}"/> ). Then, simulate in Grasshopper, and put the output.dat file back in the notebook, change the name in the last cell, and run.
+Run all the cells except the last one, get the input_spectrum.txt file(put in your grasshopper simulation directory), and the number of simulations(change the .gdml file <constant name="EventsToRun" value="{number of simulations}"/> ). Then, simulate in Grasshopper, and put the output.dat file back in the notebook, change the name in the last cell, and run.
 
 An example of gdml file needed to run grasshopper is copper.gdml
 
