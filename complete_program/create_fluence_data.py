@@ -4,97 +4,104 @@ from pathlib import Path
 from collections import defaultdict
 import configparser
 
+import sys
+
 config = configparser.ConfigParser()
 config.read('simulation.config')
 
-# Read dimensions from config
+
 length = float(config['DIMENSIONS']['length_nm'])
 width = float(config['DIMENSIONS']['width_nm'])
 thickness = float(config['DIMENSIONS']['thickness_nm'])
 
-# Configuration
+
+years = list(map(int, config['SIMULATION']['years'].split(',')))  # e.g. "2020,2025"
+months = list(map(int, config['SIMULATION'].get('months', '1,12').split(',')))
+days = list(map(int, config['SIMULATION'].get('days', '1,31').split(',')))
+
+year_range = f"{years[0]}-{years[1]}"
+month_range = f"{months[0]}-{months[1]}"
+day_range = f"{days[0]}-{days[1]}"
+
 BASE_DIR = 'goes16_data/'
-YEARS = list(map(int, config['SIMULATION']['years'].split(',')))
-YEARS = range(YEARS[0], YEARS[1]+1)
-SECONDS_PER_5MIN = 300
-SOLID_ANGLES = {"T1": 1.84, "T2": 1.84, "T3": 6.28}
 
-# ... rest of create_fluence_data.py code remains the same ...
 
-def decode_energy_label(label):
-    """Convert netCDF energy label to numerical bounds with proper parsing"""
-    if isinstance(label, np.ndarray):
-        label_str = b''.join(label).decode('utf-8').strip('\x00')
-    else:
-        label_str = label.decode('utf-8').strip('\x00')
+output_filename = f"cumulative_fluence_{year_range}_{month_range}_{day_range}.txt"
 
-    # Improved parsing for energy range
-    energy_part = label_str.split(':')[-1].replace("MeV", "").strip()
-    e_low, e_high = map(float, energy_part.split('-'))
-    return (e_low, e_high)
 
-# Initialize cumulative fluence with float values
+YEARS = range(years[0], years[1] + 1)
+
+
 cumulative_fluence = defaultdict(float)
 
-# Collect and process files
+
+energy_bins = {
+    'T1': [(1.0, 1.9), (1.9, 2.3), (2.3, 3.4), (3.4, 6.5), (6.5, 12.0), (12.0, 25.0)],
+    'T2': [(25.0, 40.0), (40.0, 80.0)],
+    'T3': [(83.0, 99.0), (99.0, 118.0), (118.0, 150.0), (150.0, 275.0), (275.0, 500.0)]
+}
+
+scaling_factor = 4 * np.pi * 1000  # 4π * 1000
+
+
 file_paths = []
 for year in YEARS:
     year_dir = Path(BASE_DIR) / str(year)
     if year_dir.exists():
         file_paths.extend(sorted(year_dir.glob('*.nc')))
 
-for file_path in file_paths:
+if not file_paths:
+    print("No netCDF files found in the specified year range.")
+    sys.exit(1)
+
+#Initialize total_fluence dictionary for each telescope and directions (+X and -X)
+total_fluence = {}
+with Dataset(file_paths[0], 'r') as nc:
+    for t in range(3):
+        var = nc[f'T{t+1}_DifferentialProtonFluxes']
+        _, _, nbin = var.shape
+        #Shape (2, nbin), nbin energy bins
+        total_fluence[f'T{t+1}'] = np.zeros((2, nbin), dtype=np.float64)
+
+def accumulate_file(fp):
     try:
-        with Dataset(file_path, 'r') as nc:
-            for telescope in ["T1", "T2", "T3"]:
-                try:
-                    # Get flux data as numpy array with missing values filled
-                    flux_var = nc[f'{telescope}_DifferentialProtonFluxes']
-                    flux_data = np.ma.filled(flux_var[:], fill_value=0.0)
-
-                    # Parse energy bins
-                    energy_labels = nc[f'energy_{telescope}_label'][:]
-                    energy_bins = [decode_energy_label(l) for l in energy_labels]
-                    bin_widths = np.array([(e_high - e_low)*1000 for (e_low, e_high) in energy_bins])
-
-                    # Verify array dimensions
-                    if flux_data.ndim == 3:  # [time, sector, energy]
-                        flux_data = np.sum(flux_data, axis=1)  # Sum across sectors
-
-                    # Calculate fluence with proper unit conversions
-                    fluence_5min = flux_data * SECONDS_PER_5MIN  # Time integration
-                    fluence_5min *= SOLID_ANGLES[telescope]     # Solid angle
-                    fluence_5min *= bin_widths[np.newaxis, :]   # Energy bin width
-
-                    # Sum across all time periods and sectors
-                    daily_fluence = np.sum(fluence_5min, axis=(0))
-
-                    # Accumulate to cumulative total
-                    for (e_low, e_high), fluence in zip(energy_bins, daily_fluence):
-                        band_key = f"{int(e_low)}-{e_high:.1f}" if e_high < 1 else f"{e_low:.1f}-{e_high:.1f}"
-                        cumulative_fluence[band_key] += float(fluence)
-
-                except KeyError:
-                    continue
-
+        with Dataset(fp, 'r') as nc:
+            for t in range(3):
+                tel = f'T{t+1}'
+                flux = nc[f'{tel}_DifferentialProtonFluxes'][:]  # shape (time, sectors=2, nbin)
+                # Sum over time (all timesteps) -> shape (2, nbin)
+                daily = np.ma.filled(flux, 0.0).sum(axis=0)
+                total_fluence[tel] += daily
     except Exception as e:
-        print(f"Skipping {file_path.name}: {str(e)}")
-        continue
-# Write results with proper formatting
-with open('cumulative_fluence_2020-2025.txt', 'w') as f:
-    f.write("Energy Band (MeV)\tTotal Fluence 2020-2025 (particles/cm²)\n")
-    # Sort bands numerically by lower energy
-    sorted_bands = sorted(cumulative_fluence.keys(),
-                         key=lambda x: float(x.split('-')[0]))
+        print(f"Error processing file {fp}: {str(e)}")
 
-    for band in sorted_bands:
-        fluence_val = cumulative_fluence[band]
-        # Format large numbers properly
-        if fluence_val >= 1e10:
-            formatted = f"{fluence_val:.4e}".replace('e+', ' × 10^')
-        else:
-            formatted = f"{fluence_val:.4f}"
-        f.write(f"{band}\t{fluence_val}\n") #formatted
+# Process all files
+for fp in file_paths:
+    accumulate_file(fp)
 
-print("Created cumulative_fluence_2020-2025.txt with correct values")
-print(f"{sum(cumulative_fluence.values())*0.0001}")
+#Sum +X and -X directions for each telescope
+summed_flux = []
+#Number of energy bins per telescope (for slicing)
+energy_bin_counts = [6, 2, 5]
+
+for i, tel in enumerate(['T1', 'T2', 'T3']):
+    #sum directions axis (0 and 1)
+    summed = total_fluence[tel][0, :] + total_fluence[tel][1, :]
+
+    summed_flux.append(summed[:energy_bin_counts[i]])
+
+#Compute cumulative fluence using energy bin widths and scaling
+for i, tel in enumerate(['T1', 'T2', 'T3']):
+    for flux, (low, high) in zip(summed_flux[i], energy_bins[tel]):
+        width = high - low
+        fluence = flux * scaling_factor * width
+        band_key = f"{low:.1f}-{high:.1f}"
+        cumulative_fluence[band_key] += fluence
+
+
+with open(output_filename, 'w') as f:
+    f.write("Energy Band (MeV)\tTotal Fluence (particles/cm²)\n")
+    for band in sorted(cumulative_fluence.keys(), key=lambda x: float(x.split('-')[0])):
+        f.write(f"{band}\t{cumulative_fluence[band]:.1f}\n")
+
+print(f"Created {output_filename} with correct values")
