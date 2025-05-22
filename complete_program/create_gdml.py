@@ -3,17 +3,40 @@ import configparser
 config = configparser.ConfigParser()
 config.read('simulation.config')
 
-# Read dimensions from config
+
 length = float(config['DIMENSIONS']['length_nm'])
 width = float(config['DIMENSIONS']['width_nm'])
 thickness = float(config['DIMENSIONS']['thickness_nm'])
-scale_years = float(config['SCALING']['scale_years'])
-# Read number of protons from fluence calculation
-with open('cumulative_fluence_2020-2025.txt') as f:
-    total_fluence = sum(float(line.split('\t')[1]) for line in f.readlines()[1:]) * scale_years
 
-# GDML template with placeholders
-GDML_TEMPLATE = """<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+
+scale_factor = float(config['SCALING'].get('scale_factor', '1'))
+if scale_factor <= 0:
+    scale_factor = 1
+
+years = list(map(int, config['SIMULATION']['years'].split(',')))      # e.g. "2020,2025"
+months = list(map(int, config['SIMULATION'].get('months', '1,12').split(',')))
+days = list(map(int, config['SIMULATION'].get('days', '1,31').split(',')))
+
+
+year_range = f"{years[0]}-{years[1]}"
+month_range = f"{months[0]}-{months[1]}"
+day_range = f"{days[0]}-{days[1]}"
+fluence_filename = f"cumulative_fluence_{year_range}_{month_range}_{day_range}.txt"
+
+with open(fluence_filename) as f:
+    total_fluence = sum(float(line.split('\t')[1]) for line in f.readlines()[1:])
+
+
+events_to_run = int(total_fluence *  3.6e-05* scale_factor)
+
+
+length_mm = length * 1e-6
+width_mm = width * 1e-6
+thickness_mm = thickness * 1e-6
+def format_mm(value):
+    return f"{value:.8f}".rstrip('0').rstrip('.') if '.' in f"{value:.8f}" else f"{value:.8f}"
+
+GDML_TEMPLATE = f"""<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 <gdml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../schema/gdml.xsd">
 
   <!-- MATERIALS -->
@@ -103,21 +126,21 @@ GDML_TEMPLATE = """<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 
   <!-- BEAM DEFINITION -->
   <define>
-    <constant name="RandomGenSeed" value="4"/>
+    <constant name="RandomGenSeed" value="100"/>
     <quantity name="BeamOffsetX" type="coordinate" value="0" unit="mm"/>
     <quantity name="BeamOffsetY" type="coordinate" value="0" unit="mm"/>
     <quantity name="BeamOffsetZ" type="coordinate" value="0" unit="mm"/>
     <quantity name="BeamSize" type="coordinate" value="-3" unit="mm"/>
     <quantity name="BeamEnergy" type="energy" value="-1" unit="MeV"/>
-    <constant name="EventsToRun" value="365549676"/>
+    <constant name="EventsToRun" value="{events_to_run}"/>
     <constant name="ParticleNumber" value="2212"/> <!-- Proton beam -->
-    <quantity name="WorldRadius" type="length" value="0.1" unit="mm"/>
+    <quantity name="WorldRadius" type="length" value="0.06" unit="mm"/>
   </define>
 
   <!-- SOLID GEOMETRIES -->
   <solids>
     <!-- World Volume -->
-    <box lunit="mm" name="world_solid" x="0.1" y="0.1" z="0.1"/>
+    <box lunit="mm" name="world_solid" x="0.06" y="0.06" z="0.06"/>
 
     <!-- Gate Oxide -->
     <box lunit="mm" name="gate_oxide_solid" x="0.001" y="0.001" z="0.00001"/> <!-- 10 nm thick -->
@@ -130,13 +153,14 @@ GDML_TEMPLATE = """<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
     <box lunit="mm" name="drain_solid" x="0.0005" y="0.001" z="0.0001"/> <!-- 100 nm thick -->
 
     <!-- Metal Contacts -->
-    <box lunit="mm" name="metal_contact_solid" x="0.0001" y="0.0001" z="0.000001"/> <!-- 10 nm thick -->
+    <box lunit="mm" name="metal_contact_solid" x="0.0001" y="0.0001" z="0.001"/> <!-- 10 nm thick -->
 
 
 
 
     <!-- Metal Contacts -->
-    <box lunit="mm" name="copper_contact_solid" x="0.001" y="0.001" z="0.00011"/> <!-- 10 nm thick -->
+    <box lunit="mm" name="copper_contact_solid" x="{format_mm(length_mm)}" y="{format_mm(width_mm)}" z="{format_mm(thickness_mm)}"/>
+
   </solids>
 
   <!-- STRUCTURE -->
@@ -195,21 +219,10 @@ GDML_TEMPLATE = """<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
     <world ref="world_log"/>
   </setup>
 </gdml>
-
 """
 
-# Convert nm to mm
-length_mm = length * 1e-6
-width_mm = width * 1e-6
-thickness_mm = thickness * 1e-6
 
-# Format and write GDML
-gdml_content = GDML_TEMPLATE.format(
-    total_protons=int(total_fluence),
-    length_mm=length_mm,
-    width_mm=width_mm,
-    thickness_mm=thickness_mm
-)
+with open('copper_omni.gdml', 'w') as f:
+    f.write(GDML_TEMPLATE)
 
-with open('copper_100_10nm_omni.gdml', 'w') as f:
-    f.write(gdml_content)
+print(f"GDML file written with EventsToRun = {events_to_run} and copper contact size {length}nm x {width}nm x {thickness}nm")
