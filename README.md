@@ -16,7 +16,7 @@ do
 
 pip install netCDF4 numpy scipy matplotlib pandas bs4 requests
 
-To use the automated program created in the complete_program directory, git clone this in the grasshopper/exec/Examples directory of grasshopper. Go into complete_program directory, then run run_simulation.py. The program will ask for the dataset link, the number of years of the dataset, the number of target years, to which the program will scale the results, and the copper size.
+To use the automated program created in the complete_program directory, after downloading grasshopper and setting it up, git clone this repository. Go into complete_program directory, then run run_simulation.py. The program will ask for the dataset link, the number of years of the dataset(or days, or months), the scaling factor, to which the program will scale the results, and the copper dimensions.
 
 Example usage: 
 
