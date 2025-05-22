@@ -5,22 +5,24 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
 import configparser
 
+
 config = configparser.ConfigParser()
 config.read('simulation.config')
 
-# Configuration from file
 BASE_URL = config['SIMULATION']['base_url']
-YEARS = list(map(int, config['SIMULATION']['years'].split(',')))
-YEARS = range(YEARS[0], YEARS[1]+1)
-SAMPLE_DAYS_PER_MONTH = 31
+YEAR_RANGE = list(map(int, config['SIMULATION']['years'].split(',')))
+MONTH_RANGE = list(map(int, config['SIMULATION']['months'].split(',')))
+DAY_RANGE = list(map(int, config['SIMULATION']['days'].split(',')))
+
+YEARS = range(YEAR_RANGE[0], YEAR_RANGE[1] + 1)
+MONTHS = range(MONTH_RANGE[0], MONTH_RANGE[1] + 1)
+SAMPLE_DAYS = DAY_RANGE[1] - DAY_RANGE[0] + 1
 
 def create_year_folders():
     for year in YEARS:
         os.makedirs(f"goes16_data/{year}", exist_ok=True)
 
-# ... rest of download_db.py code remains the same ...
 def get_monthly_files(year, month):
-    """Get list of available daily files for a given month"""
     url = f"{BASE_URL}/{year}/{month:02d}/"
     try:
         response = requests.get(url, timeout=10)
@@ -33,8 +35,6 @@ def get_monthly_files(year, month):
         return []
 
 def download_file(year, month, day_file):
-    """Download a single daily file to its year folder"""
-    day = day_file[20:22]  # Extract day from filename
     url = f"{BASE_URL}/{year}/{month:02d}/{day_file}"
     local_path = f"goes16_data/{year}/{day_file}"
 
@@ -53,16 +53,14 @@ def download_file(year, month, day_file):
     return True
 
 def process_year_month(year, month):
-    """Process one month's data with sampling"""
     files = get_monthly_files(year, month)
     if not files:
         return 0
 
-    # Sample evenly across the month
-    sample_indices = np.linspace(0, len(files)-1, SAMPLE_DAYS_PER_MONTH, dtype=int)
+
+    sample_indices = np.linspace(0, len(files) - 1, min(SAMPLE_DAYS, len(files)), dtype=int)
     sampled_files = [files[i] for i in sample_indices]
 
-    # Download sampled files in parallel
     with ThreadPoolExecutor(max_workers=5) as executor:
         results = list(executor.map(lambda f: download_file(year, month, f), sampled_files))
 
@@ -73,7 +71,7 @@ def main():
     total_downloaded = 0
 
     for year in YEARS:
-        for month in range(1, 13):
+        for month in MONTHS:
             downloaded = process_year_month(year, month)
             total_downloaded += downloaded
 
