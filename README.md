@@ -14,7 +14,7 @@ An example of gdml file needed to run grasshopper is copper.gdml
 
 do
 
-pip install netCDF4 numpy scipy matplotlib pandas bs4 requests
+**`pip install netCDF4 numpy scipy matplotlib pandas bs4 requests`**
 
 To use the automated program created in the complete_program directory, after downloading grasshopper and setting it up(add to PATH), git clone this repository. Go into complete_program directory, then run run_simulation.py. The program will ask for the dataset link, the number of years of the dataset to download(or days, or months), the scaling factor, to which the program will scale the results, and the copper dimensions(nm).
 
