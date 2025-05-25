@@ -20,7 +20,7 @@ To use the automated program created in the complete_program directory, after do
 
 Example usage: 
 
-python3 run_simulation.py   --length 100   --width 10000   --thickness 10   --years 2020   --months 1   --days 1   --url https://data.ngdc.noaa.gov/platforms/solar-space-observing-satellites/goes/goes16/l1b/seis-l1b-sgps --scale_factor 365
+**`python3 run_simulation.py   --length 100   --width 10000   --thickness 10   --years 2020   --months 1   --days 1   --url https://data.ngdc.noaa.gov/platforms/solar-space-observing-satellites/goes/goes16/l1b/seis-l1b-sgps --scale_factor 365`**
 
 This downloads 1 day of data(Jan 1, 2020 proton observations), scales it to 1 year, runs a simulation in grasshopper, and gives the resistance change in 1 year(assuming that the fluence for each day of the  year was the same as the downloaded day). Tested for GOES-16_SEISS_SGPS Data.
 
